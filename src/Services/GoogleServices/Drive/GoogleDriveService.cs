@@ -1,69 +1,37 @@
 ﻿using Google.Apis.Auth.OAuth2;
 using Google.Apis.Drive.v3;
 using Google.Apis.Services;
-using Google.Apis.Util.Store;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using Gfile = Google.Apis.Drive.v3.Data.File;
 
 namespace MailingApp.GoogleServices.Drive
 {
-    public interface IGoogleDriveService
-    {
-        string CreateFile(string name, MemoryStream stream, string mime = null);
-        Task<string> CreateFileAsync(string name, MemoryStream stream = null, string mime = "text/plain");
-        string CreateFolder(string name);
-        Task<string> CreateFolderAsync(string name);
-        void EnsureDriveFolderCreated();
-        bool FileExists(string name);
-        Task<bool> FileExistsAsync(string name, string orderBy = null, string fields = null, string query = null);
-        bool FoldeExists(string name);
-        Task<bool> FolderExistsAsync(string name);
-        IList<Gfile> GetFilesByName(string name);
-    }
-
     public class GoogleDriveService : IGoogleDriveService
     {
-        static string[] Scopes = { DriveService.Scope.DriveFile };
-        public const string ApplicationName = "DriveRpiConnection";
-        private const string APP_FOLDER = "RpiTestFolder";
-        private const string CREDENTIALS_PATH = "./";
         private DriveService _service { get; set; }
 
-        public static string APP_FOLDER_ID { get; set; }
+        private static string AppFolderID { get; set; }
 
-        public GoogleDriveService()
+        public GoogleDriveService(UserCredential credentials)
         {
-            UserCredential credentials;
-            using (var stream = new FileStream("client_id.json", FileMode.Open, FileAccess.Read))
-            {
-                string credPath = CREDENTIALS_PATH;
-                credentials = GoogleWebAuthorizationBroker.AuthorizeAsync(
-                    GoogleClientSecrets.Load(stream).Secrets,
-                                Scopes,
-                                "user",
-                                CancellationToken.None,
-                                new FileDataStore(credPath, true)).Result;
-            }
-
-            _service = new DriveService(new BaseClientService.Initializer()
+           _service =  new DriveService(new BaseClientService.Initializer()
             {
                 HttpClientInitializer = credentials,
-                ApplicationName = ApplicationName,
+                ApplicationName = App.AppSettings["AppnName"]
             });
         }
 
         public void EnsureDriveFolderCreated()
         {
-            if (!FoldeExists(APP_FOLDER))
+            if (!FoldeExists(App.AppSettings["AppnDriveFolder"]))
             {
-                CreateFolder(APP_FOLDER);
+                CreateFolder(App.AppSettings["AppnDriveFolder"]);
             }
-            APP_FOLDER_ID = GetFilesByName(APP_FOLDER).First().Id;
+            AppFolderID = GetFilesByName(App.AppSettings["AppnDriveFolder"]).First().Id;
         }
 
         public string CreateFile(string name, MemoryStream stream, string mime = null)
@@ -78,7 +46,7 @@ namespace MailingApp.GoogleServices.Drive
                 MimeType = mime,
                 CreatedTime = DateTime.Now,
                 Parents = new List<string>{
-                    APP_FOLDER_ID
+                    AppFolderID
                 }
 
             };
@@ -102,12 +70,14 @@ namespace MailingApp.GoogleServices.Drive
             return request.Execute().Files;
         }
 
+        //TODO: Destroy the synchronous version
         public bool FileExists(string name)
         {
             return FileExistsAsync(
                 name: name,
                 orderBy: null,
                 fields: "nextPageToken, files(name, id)",
+                //TODO: Replace string with enums => create a google export/import mimeType library
                 query: "mimeType = 'application/vnd.google-apps.file'").Result;
         }
 
@@ -161,5 +131,7 @@ namespace MailingApp.GoogleServices.Drive
         {
             return await FileExistsAsync(name, "folder");
         }
+
+        public AboutResource About => _service.About;
     }
 }
