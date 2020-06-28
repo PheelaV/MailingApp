@@ -1,6 +1,6 @@
 # MailingApp
 
-# ⚠ Work In Progress ⚠
+# very much a ⚠ Work In Progress ⚠
 
 
 ## Roadmap
